@@ -123,4 +123,90 @@ app.use(cors({
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
-...
+app.use(globalLimiter);
+
+// Custom Metadata and Streaming Headers
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Vary", "Accept-Encoding");
+  next();
+});
+
+// Logging Transport Stream (Bypassed in test runner to keep outputs clean)
+if (process.env.NODE_ENV !== 'test') {
+  app.use((req, res, next) => {
+    console.log(`[📡 TRAFFIC TRACE] ${new Date().toISOString()} -> ${req.method} ${req.url}`);
+    next();
+  });
+}
+
+// =========================================================================
+// PHASE 5: MOUNTING CLEAN RESTFUL ROUTING LAYERS
+// =========================================================================
+app.use('/api/auth', authRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use("/api/verification", verificationRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/banks', bankRoutes);
+app.use("/api/transaction", transactionsRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/checkout", checkoutRoutes);
+
+// Base Status System Audits
+mapStatusProbe('/health-check', "Tracev Backend Application Engine is running smoothly.");
+mapStatusProbe('/', "Welcome to the Tracev Core API. Please refer to documentation for available parameters.");
+
+function mapStatusProbe(pathEndpoint, statusMessage) {
+  app.get(pathEndpoint, (req, res) => {
+    res.status(200).json({ success: true, message: statusMessage });
+  });
+}
+
+// =========================================================================
+// PHASE 6: SYSTEM EXCEPTION TUNNELLING & ROBUST ERROR HANDLERS
+// =========================================================================
+
+// Intercept completely unmatched resource allocations
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    error: "ROUTE_NOT_FOUND",
+    message: `The endpoint ${req.method} ${req.originalUrl} does not exist on this infrastructure server`,
+    method: req.method,
+    path: req.originalUrl,
+  });
+});
+
+// Deep Pipeline Failures & Server Interceptions
+app.use((err, req, res, next) => {
+  console.error("🔥 [CRITICAL CORE FAULT] Cascading runtime breakdown intercepted:", err.stack || err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  return res.status(err.status || 500).json({
+    success: false,
+    error: err.code || "INTERNAL_SERVER_ERROR",
+    message: err.message || "An isolated structural anomaly occurred inside the application matrix.",
+  });
+});
+
+// Operational Process Safeguards
+process.on('uncaughtException', (runtimeException) => {
+  console.error('🚨 [UNCAUGHT CRASH PROTECTOR] Intercepted core thread system error:', runtimeException.stack || runtimeException);
+});
+
+process.on('unhandledRejection', (asyncRejectionReason, promiseContext) => {
+  console.error('🚨 [UNHANDLED ASYNC PROTECTOR] Broken promise sequence detected at:', promiseContext, 'Reason:', asyncRejectionReason);
+});
+
+// =========================================================================
+// PHASE 7: APPARATUS ACTIVATION SWITCHBOARD
+// =========================================================================
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`[✅ INFRASTRUCTURE ACTIVE] Core processing gateway fully listening on port ${PORT}`);
+  });
+}
+
+module.exports = app;
